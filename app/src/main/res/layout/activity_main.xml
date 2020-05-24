@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:clock="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+
+    <com.example.clockdemo.ClockView
+        android:id="@+id/dv_clock"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_margin="10dp"
+        clock:border_color="@android:color/black"
+        clock:border_width="15dp"
+        clock:hour_color="@android:color/black"
+        clock:minute_color="@android:color/black"
+        clock:num_color="@android:color/black"
+        clock:num_size="20sp"
+        clock:point_color="@android:color/darker_gray"
+        clock:second_color="@android:color/black"/>
+
+
+</LinearLayout>
