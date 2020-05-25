@@ -7,7 +7,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Handler;
-import android.os.Message;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
@@ -16,42 +15,63 @@ import android.view.View;
 import androidx.annotation.Nullable;
 
 import java.util.Calendar;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.jar.Attributes;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+//这个函数主要利用自定义控件实现时钟显示当前时间
 
 public class ClockView extends View {
 
+    //借此参数推算角度
+    private static final int MINUTES_IN_A_HOUR=60;
+    private static final int DEGREES_OF_A_LAP=360;
+    private static final int HOURS_OF_A_LAP=12;
+
+    //边框高度 颜色
     private int mBorderWidth;
     private int mBorderColor;
 
+    //数字大小 颜色
     private int mNumSize;
     private int mNumColor;
 
+    //周边小点 颜色
     private int mPointColor;
 
+    //时针分针秒针的颜色
     private int mHourColor;
     private int mMinuteColor;
     private int mSecondColor;
 
+    //画笔
     private Paint mPaint;
 
+    //刻度
     private Rect mBound;
 
+    //自定义View长宽
     private int mHeight;
     private int mWidth;
 
-    private boolean isShow;
+    //控制变量 并发保证原子性
+    private AtomicBoolean isShow;
 
+    //时间
     private Calendar mCalendar;
 
-    private Handler mHandler = new Handler() {
+    //开辟Background线程每隔1秒重新绘制 不阻塞UI
+    private Handler mHandler = new Handler();
+    Runnable mRunnable=new Runnable() {
         @Override
-        public void handleMessage(Message msg) {
-            invalidate();
+        public void run() {
+            Log.d("test", "绘制一次");
+            if (isShow.get()) {
+                invalidate();
+            }
+            mHandler.postDelayed(this,1000);
         }
     };
 
+    //构造函数
     public ClockView(Context context) {
         this(context, null);
     }
@@ -62,66 +82,72 @@ public class ClockView extends View {
 
     public ClockView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        init(context, attrs, defStyleAttr);
+        mHandler.postDelayed(mRunnable,0);
+    }
+
+    //初始化
+    private void init(Context context, AttributeSet attrs, int defStyleAttr) {
         TypedArray array = context.getTheme().obtainStyledAttributes(attrs, R.styleable.ClockView, defStyleAttr, 0);
-        for (int i = 0; i < array.getIndexCount(); i++) {//用getIndexCount   减少循环次数，提高性能   用.length也不能执行所有的case情况
+        for (int i = 0; i < array.getIndexCount(); i++) {
             int attr = array.getIndex(i);
             switch (attr) {
-                case R.styleable.ClockView_border_width://边框宽度
+                //边框高度
+                case R.styleable.ClockView_border_width:
                     mBorderWidth = array.getDimensionPixelSize(attr, (int) TypedValue.applyDimension(
                             TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics()));
                     break;
-                case R.styleable.ClockView_border_color://边框颜色
+                //边框颜色
+                case R.styleable.ClockView_border_color:
                     mBorderColor = array.getColor(attr, Color.BLACK);
                     break;
-                case R.styleable.ClockView_num_color://数字颜色
+                //数字颜色
+                case R.styleable.ClockView_num_color:
                     mNumColor = array.getColor(attr, Color.BLACK);
                     break;
-                case R.styleable.ClockView_num_size://数字字号
+                //数字字号
+                case R.styleable.ClockView_num_size:
                     mNumSize = array.getDimensionPixelSize(attr, (int) TypedValue.applyDimension(
                             TypedValue.COMPLEX_UNIT_SP, 16, getResources().getDisplayMetrics()));
                     break;
-                case R.styleable.ClockView_point_color://周围小点颜色
+                //周围小点颜色
+                case R.styleable.ClockView_point_color:
                     mPointColor = array.getColor(attr, Color.BLACK);
                     break;
-                case R.styleable.ClockView_hour_color://时针颜色
+                //时针颜色
+                case R.styleable.ClockView_hour_color:
                     mHourColor = array.getColor(attr, Color.BLACK);
                     break;
-                case R.styleable.ClockView_minute_color://分针颜色
+                //分针颜色
+                case R.styleable.ClockView_minute_color:
                     mMinuteColor = array.getColor(attr, Color.BLACK);
                     break;
-                case R.styleable.ClockView_second_color://秒针颜色
+                //秒针颜色
+                case R.styleable.ClockView_second_color:
                     mSecondColor = array.getColor(attr, Color.BLACK);
                     break;
             }
         }
         array.recycle();
-        isShow = true;
+        isShow = new AtomicBoolean(true);
         mCalendar = Calendar.getInstance();
         mPaint = new Paint();
         mBound = new Rect();
-        Timer timer = new Timer("绘制线程");
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                Log.d("test", "绘制一次");
-                if (isShow) {
-                    mHandler.sendEmptyMessage(1);
-                }
-            }
-        }, 0, 1000);
     }
 
 
-
+    //测量计算组件大小
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
+        //获取控件测量模式及大小
         int widthMode=MeasureSpec.getMode(widthMeasureSpec);
         int widthSize=MeasureSpec.getSize(widthMeasureSpec);
         int heightMode=MeasureSpec.getMode(heightMeasureSpec);
         int heightSize=MeasureSpec.getSize(heightMeasureSpec);
 
+        //根据模式测算距离
         if (widthMode == MeasureSpec.EXACTLY) {
             mWidth = widthSize;
         } else {
@@ -137,33 +163,40 @@ public class ClockView extends View {
             mHeight = Math.min(desire, heightSize);
         }
 
+        //为确保不会越过控件边界 取长宽中较小值
         mWidth = Math.min(mWidth, mHeight);
         setMeasuredDimension(mWidth, mWidth);
     }
 
+    //绘制过程
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
+        //边框大小
         mBorderWidth = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-
         mBound.left = getPaddingLeft();
         mBound.right = mWidth - getPaddingRight();
         mBound.top = getPaddingTop();
         mBound.bottom = mHeight - getPaddingBottom();
 
+        //圆形的位置
         final int cx, cy, width;
         cx = getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) / 2;
         cy = getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) / 2;
         width = Math.min(getWidth() / 2, getHeight() / 2);
 
+        //消除锯齿
         mPaint.setAntiAlias(true);
+
+        //绘制边界
         mPaint.setColor(mBorderColor);
         if (mBorderColor == 0) {
             mPaint.setColor(Color.BLACK);
         }
         canvas.drawCircle(cx, cy, width, mPaint);
 
+        //绘制时针 分针 秒针
         mPaint.setColor(Color.WHITE);
         canvas.drawCircle(cx, cy, width - mBorderWidth, mPaint);
 
@@ -175,8 +208,10 @@ public class ClockView extends View {
             mPaint.setColor(Color.BLACK);
         }
 
+        //保存状态
         canvas.save();
 
+        //绘制时钟上刻度
         for (int i = 0; i < 60; i++) {
             if (i % 5 == 0) {
                 canvas.drawRect(cx - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, getResources().getDisplayMetrics()),
@@ -191,12 +226,16 @@ public class ClockView extends View {
             }
             canvas.rotate(6, cx, cy);
         }
+
+        //回到上一次状态
         canvas.restore();
 
         mPaint.setColor(mNumColor);
         if (mNumColor == 0) {
             mPaint.setColor(Color.BLACK);
         }
+
+        //绘制时钟上文字
         mPaint.setTextSize(mNumSize);
         if (mNumSize == 0) {
             mPaint.setTextSize((int) TypedValue.applyDimension(
@@ -214,9 +253,10 @@ public class ClockView extends View {
         }
         canvas.restore();
 
-        int hour = mCalendar.get(Calendar.HOUR);//HOUR    进制为12小时   HOUR_OF_DAY  为24小时
-        int minute = mCalendar.get(Calendar.MINUTE);//分钟
-        int second = mCalendar.get(Calendar.SECOND) + 1;//秒数
+        //当满60时 需要相应进位
+        int hour = mCalendar.get(Calendar.HOUR);
+        int minute = mCalendar.get(Calendar.MINUTE);
+        int second = mCalendar.get(Calendar.SECOND) + 1;
         if (second == 60) {
             minute += 1;
             second = 0;
@@ -228,12 +268,16 @@ public class ClockView extends View {
         if (hour == 12){
             hour = 0;
         }
+
+        //设置时间
         mCalendar.set(Calendar.SECOND, second);
         mCalendar.set(Calendar.MINUTE, minute);
         mCalendar.set(Calendar.HOUR, hour);
-        float hourDegree = 360 * hour / 12 + 360 / 12 * minute / 60;
-        float minuteDegree = 360 * minute / 60 + 360 / 60 * second / 60;
-        float secondDegree = 360 * second / 60;
+
+        //测算角度
+        float hourDegree =  DEGREES_OF_A_LAP * hour / HOURS_OF_A_LAP + DEGREES_OF_A_LAP / HOURS_OF_A_LAP * minute / MINUTES_IN_A_HOUR;
+        float minuteDegree = DEGREES_OF_A_LAP * minute / MINUTES_IN_A_HOUR + DEGREES_OF_A_LAP / MINUTES_IN_A_HOUR * second / MINUTES_IN_A_HOUR;
+        float secondDegree = DEGREES_OF_A_LAP * second / MINUTES_IN_A_HOUR;
 
         mPaint.setColor(mHourColor);
         if (mHourColor == 0) {
@@ -275,12 +319,15 @@ public class ClockView extends View {
         canvas.drawCircle(cx, cy, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6, getResources().getDisplayMetrics()), mPaint);
     }
 
+    //当Activity结束时 停止该时钟
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        isShow = false;
+        isShow.set(false);
+        mHandler.removeCallbacks(mRunnable);
     }
 
+    //设置当前时间
     public void setTime(Calendar calendar) {
         mCalendar = calendar;
     }
